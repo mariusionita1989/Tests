@@ -1,53 +1,10 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Diagnostics.Runtime.Utilities;
 
 namespace Tests
 {
-    //public static class SuffixArrayGenerator
-    //{
-    //    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    //    private static int UnsafeCompare(string s, int i, int j)
-    //    {
-    //        int len = s.Length;
-    //        ref char r = ref MemoryMarshal.GetReference(s.AsSpan());
-
-    //        while (i < len && j < len)
-    //        {
-    //            char a = Unsafe.Add(ref r, i);
-    //            char b = Unsafe.Add(ref r, j);
-    //            if (a != b)
-    //                return a - b;
-    //            i++;
-    //            j++;
-    //        }
-
-    //        return (len - i) - (len - j); // shorter suffix comes first
-    //    }
-
-    //    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    //    public static int[] BuildSuffixArray(string input)
-    //    {
-    //        int length = input.Length;
-    //        int[] suffixIndices = new int[length];
-    //        for (int i = 0; i < length; i++)
-    //            suffixIndices[i] = i;
-
-    //        Array.Sort(suffixIndices, (i, j) => UnsafeCompare(input, i, j));
-    //        return suffixIndices;
-    //    }
-
-    //    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    //    public static void PrintSuffixArray(string input)
-    //    {
-    //        var suffixArray = BuildSuffixArray(input);
-    //        //foreach (int index in suffixArray)
-    //        //{
-    //        //    Console.WriteLine($"{index}: {input.Substring(index)}");
-    //        //}
-    //    }
-    //}
-
     public static class SuffixArrayGenerator
     {
         private unsafe struct BytePointerSuffixComparer : IComparer<int>
@@ -89,6 +46,7 @@ namespace Tests
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public unsafe static int[] BuildSuffixArray(string input)
         {
             byte[] buffer = Encoding.UTF8.GetBytes(input); // Use Latin1 if you want 1:1 char->byte
@@ -107,9 +65,22 @@ namespace Tests
             return suffixIndices;
         }
 
-        public static void PrintSuffixArray(string input)
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+        public static void PrintSuffixArray(string input, bool getString = false)
         {
             var sa = BuildSuffixArray(input);
+            StringBuilder sb = new StringBuilder(string.Empty);
+
+            if (getString) 
+            {
+                for (int i = sa.Length-1; i >= 0; i--)
+                {
+                    sb.Append(input[sa[i]]);
+                }
+
+                Console.WriteLine($"Bwt text: {sb.ToString()}");
+            }
+           
             for (int i = 0; i < sa.Length; i++)
             {
                 Console.WriteLine($"{sa[i]}: {input[sa[i]..]}");

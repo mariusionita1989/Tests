@@ -26,6 +26,68 @@ namespace Tests
             return a.Length - b.Length;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+        public static int CompareAvx2(char[] a, char[] b)
+        {
+            int length = Math.Min(a.Length, b.Length);
+            ref char aRef = ref MemoryMarshal.GetArrayDataReference(a);
+            ref char bRef = ref MemoryMarshal.GetArrayDataReference(b);
+
+            int i = 0;
+
+            if (Avx2.IsSupported && length >= Vector256<ushort>.Count)
+            {
+                // Process 16 chars (32 bytes) at a time
+                for (; i <= length - Vector256<ushort>.Count; i += Vector256<ushort>.Count)
+                {
+                    // Load 16 chars from each array
+                    Vector256<ushort> vecA = Unsafe.ReadUnaligned<Vector256<ushort>>(
+                        ref Unsafe.As<char, byte>(ref Unsafe.Add(ref aRef, i)));
+                    Vector256<ushort> vecB = Unsafe.ReadUnaligned<Vector256<ushort>>(
+                        ref Unsafe.As<char, byte>(ref Unsafe.Add(ref bRef, i)));
+
+                    // Compare vectors
+                    Vector256<ushort> comparison = Avx2.CompareEqual(vecA, vecB);
+                    uint mask = (uint)Avx2.MoveMask(comparison.AsByte());
+
+                    // If not all equal
+                    if (mask != 0xFFFFFFFF)
+                    {
+                        // Find first mismatch
+                        int mismatchIndex = i + BitOperations.TrailingZeroCount(~mask) / sizeof(char);
+                        if (mismatchIndex < length)
+                        {
+                            return Unsafe.Add(ref aRef, mismatchIndex) - Unsafe.Add(ref bRef, mismatchIndex);
+                        }
+                    }
+                }
+            }
+
+            // Scalar fallback for remaining elements
+            for (; i < length; i++)
+            {
+                char ca = Unsafe.Add(ref aRef, i);
+                char cb = Unsafe.Add(ref bRef, i);
+                if (ca != cb)
+                    return ca - cb;
+            }
+
+            return a.Length - b.Length;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ulong PackCharsToBits(ulong chars)
+        {
+            // Each char is 2 bytes, we process 4 chars at a time
+            // A=00, B=01, C=10, D=11
+            ulong mask = 0x0003000300030003; // Mask for lowest 2 bits of each char
+            return (chars >> 14) & mask |    // Get bits 15-16 (our encoding bits)
+                   (chars >> 30) & (mask << 16) |
+                   (chars >> 46) & (mask << 32) |
+                   (chars >> 62) & (mask << 48);
+        }
+
+
         [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern int memcmp(IntPtr b1, IntPtr b2, UIntPtr count);
 
@@ -75,7 +137,7 @@ namespace Tests
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-        public static int CompareBytesFast(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+        public static int CompareBytesFast(Span<byte> a, Span<byte> b)
         {
             int len = Math.Min(a.Length, b.Length);
             int i = 0;
